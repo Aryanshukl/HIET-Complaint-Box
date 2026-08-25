@@ -1,0 +1,296 @@
+import { useEffect, useState } from 'react';
+import {
+  MessageSquareWarning,
+  ShieldCheck,
+  UserCog,
+  Home,
+  LogOut,
+  Lock,
+  Menu,
+  X,
+} from 'lucide-react';
+import { ToastProvider, useToast } from '@/components/Toast';
+import { PasscodeModal } from '@/components/PasscodeModal';
+import { StudentView } from '@/views/StudentView';
+import { ModeratorView } from '@/views/ModeratorView';
+import { AdminView } from '@/views/AdminView';
+import {
+  clearPortalSession,
+  getPortalSession,
+  setPortalSession,
+  type PortalRole,
+} from '@/lib/auth';
+import { MODERATOR_NAME } from '@/lib/constants';
+
+type Route = 'home' | 'moderator' | 'admin';
+
+function getRouteFromHash(): Route {
+  const h = window.location.hash.replace('#/', '').replace('#', '');
+  if (h === 'moderator' || h === 'admin') return h;
+  return 'home';
+}
+
+function navigate(route: Route) {
+  window.location.hash = `/${route}`;
+}
+
+function Sidebar({
+  route,
+  onNavigate,
+  session,
+  onLogout,
+  mobileOpen,
+  onCloseMobile,
+}: {
+  route: Route;
+  onNavigate: (r: Route) => void;
+  session: PortalRole | null;
+  onLogout: () => void;
+  mobileOpen: boolean;
+  onCloseMobile: () => void;
+}) {
+  const navItems: { key: Route; label: string; icon: typeof Home; locked?: boolean }[] = [
+    { key: 'home', label: 'Student Corner', icon: Home },
+    { key: 'moderator', label: 'Moderator Portal', icon: ShieldCheck, locked: true },
+    { key: 'admin', label: 'Admin Portal', icon: UserCog, locked: true },
+  ];
+
+  return (
+    <>
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-navy-950/50 backdrop-blur-sm lg:hidden"
+          onClick={onCloseMobile}
+        />
+      )}
+      <aside
+        className={`fixed inset-y-0 left-0 z-40 flex w-72 flex-col bg-navy-950 text-white transition-transform duration-300 lg:static lg:translate-x-0 ${
+          mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+        }`}
+      >
+        <div className="flex items-center justify-between px-6 py-6">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-teal-600 shadow-lg shadow-teal-600/20">
+              <MessageSquareWarning className="h-6 w-6 text-white" />
+            </div>
+            <div>
+              <h1 className="text-sm font-bold leading-tight">HIET Online</h1>
+              <p className="text-xs text-navy-300">Complaint Box</p>
+            </div>
+          </div>
+          <button
+            onClick={onCloseMobile}
+            className="rounded-md p-1.5 text-navy-300 transition-colors hover:bg-navy-800 hover:text-white lg:hidden"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <nav className="mt-4 flex-1 space-y-1 px-3">
+          {navItems.map((item) => {
+            const active = route === item.key;
+            const Icon = item.icon;
+            const accessible =
+              !item.locked ||
+              (item.key === 'moderator' && session === 'moderator') ||
+              (item.key === 'admin' && session === 'admin');
+            return (
+              <button
+                key={item.key}
+                onClick={() => onNavigate(item.key)}
+                className={`group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all ${
+                  active
+                    ? 'bg-teal-600 text-white shadow-sm'
+                    : 'text-navy-300 hover:bg-navy-800 hover:text-white'
+                }`}
+              >
+                <Icon className="h-5 w-5 shrink-0" />
+                <span className="flex-1 text-left">{item.label}</span>
+                {item.locked && !accessible && (
+                  <Lock className="h-3.5 w-3.5 text-navy-500 group-hover:text-navy-400" />
+                )}
+              </button>
+            );
+          })}
+        </nav>
+
+        <div className="border-t border-navy-800 px-3 py-4">
+          {session ? (
+            <div className="rounded-lg bg-navy-900 p-3">
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-teal-600 text-xs font-bold text-white">
+                  {session === 'moderator' ? 'M' : 'A'}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="truncate text-sm font-semibold text-white">
+                    {session === 'moderator' ? `${MODERATOR_NAME} (Moderator)` : 'Administrator'}
+                  </p>
+                  <p className="text-xs text-navy-400">Signed in</p>
+                </div>
+              </div>
+              <button
+                onClick={onLogout}
+                className="mt-3 flex w-full items-center justify-center gap-2 rounded-md bg-navy-800 px-3 py-2 text-xs font-semibold text-navy-200 transition-colors hover:bg-navy-700 hover:text-white"
+              >
+                <LogOut className="h-3.5 w-3.5" />
+                Logout
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 rounded-lg bg-navy-900 px-3 py-2.5 text-xs text-navy-400">
+              <Lock className="h-3.5 w-3.5" />
+              Portals are passcode-protected
+            </div>
+          )}
+        </div>
+      </aside>
+    </>
+  );
+}
+
+function AppContent() {
+  const [route, setRoute] = useState<Route>(getRouteFromHash());
+  const [session, setSession] = useState<PortalRole | null>(getPortalSession());
+  const [pendingPortal, setPendingPortal] = useState<PortalRole | null>(null);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const toast = useToast();
+
+  useEffect(() => {
+    const onHash = () => setRoute(getRouteFromHash());
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
+
+  const handleNavigate = (r: Route) => {
+    navigate(r);
+    setRoute(r);
+    setMobileNavOpen(false);
+  };
+
+  const handlePortalAccess = (role: PortalRole) => {
+    setPendingPortal(role);
+  };
+
+  const handlePasscodeSuccess = () => {
+    if (pendingPortal) {
+      setPortalSession(pendingPortal);
+      setSession(pendingPortal);
+      toast(`${pendingPortal === 'moderator' ? 'Moderator' : 'Admin'} portal unlocked`, 'success');
+    }
+    setPendingPortal(null);
+  };
+
+  const handleLogout = () => {
+    clearPortalSession();
+    setSession(null);
+    navigate('home');
+    setRoute('home');
+    toast('You have been logged out', 'info');
+  };
+
+  // Guard: if navigating to a portal route without a matching session, prompt
+  useEffect(() => {
+    if (route === 'moderator' && session !== 'moderator') {
+      setPendingPortal('moderator');
+    } else if (route === 'admin' && session !== 'admin') {
+      setPendingPortal('admin');
+    } else {
+      setPendingPortal(null);
+    }
+  }, [route, session]);
+
+  const canViewPortal =
+    (route === 'moderator' && session === 'moderator') ||
+    (route === 'admin' && session === 'admin');
+
+  return (
+    <div className="flex min-h-screen bg-slatebg">
+      <Sidebar
+        route={route}
+        onNavigate={handleNavigate}
+        session={session}
+        onLogout={handleLogout}
+        mobileOpen={mobileNavOpen}
+        onCloseMobile={() => setMobileNavOpen(false)}
+      />
+
+      <div className="flex flex-1 flex-col min-w-0">
+        {/* Mobile top bar */}
+        <header className="flex items-center justify-between border-b border-navy-100 bg-white px-4 py-3 lg:hidden">
+          <button
+            onClick={() => setMobileNavOpen(true)}
+            className="rounded-md p-2 text-navy-600 transition-colors hover:bg-navy-50"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-600">
+              <MessageSquareWarning className="h-4 w-4 text-white" />
+            </div>
+            <span className="text-sm font-bold text-navy-900">HIET Complaint Box</span>
+          </div>
+        </header>
+
+        <main className="flex-1 overflow-y-auto">
+          {route === 'home' && <StudentView />}
+          {route === 'moderator' &&
+            (canViewPortal ? (
+              <ModeratorView />
+            ) : (
+              <PortalLockedPlaceholder role="moderator" onAccess={() => handlePortalAccess('moderator')} />
+            ))}
+          {route === 'admin' &&
+            (canViewPortal ? (
+              <AdminView />
+            ) : (
+              <PortalLockedPlaceholder role="admin" onAccess={() => handlePortalAccess('admin')} />
+            ))}
+        </main>
+      </div>
+
+      {pendingPortal && (
+        <PasscodeModal
+          role={pendingPortal}
+          onClose={() => setPendingPortal(null)}
+          onSuccess={handlePasscodeSuccess}
+        />
+      )}
+    </div>
+  );
+}
+
+function PortalLockedPlaceholder({
+  role,
+  onAccess,
+}: {
+  role: PortalRole;
+  onAccess: () => void;
+}) {
+  return (
+    <div className="flex min-h-[70vh] items-center justify-center p-6">
+      <div className="card max-w-md p-8 text-center animate-slide-up">
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-navy-50">
+          <Lock className="h-8 w-8 text-navy-600" />
+        </div>
+        <h2 className="mt-5 text-xl font-bold text-navy-900">
+          {role === 'moderator' ? 'Moderator Portal' : 'Admin Portal'}
+        </h2>
+        <p className="mt-2 text-sm text-navy-500">
+          This area is restricted. Enter the {role} passcode to access the dashboard.
+        </p>
+        <button onClick={onAccess} className="btn-primary mt-6 w-full">
+          <Lock className="h-4 w-4" />
+          Enter Passcode
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export default function App() {
+  return (
+    <ToastProvider>
+      <AppContent />
+    </ToastProvider>
+  );
+}
