@@ -8,7 +8,7 @@ A centralized student complaint and feedback management system designed for HIET
 * **Live Web App:** [Open HIET Complaint Box](https://q27baz5hzm4h8zr7lk973bzgv.bolt.host/)
 * **Presentation Deck:** [View SIH Slides (PPTX)](./HIET_Online_Complaint_Box_SIH_12_Slides.pptx)
 
-* ## 📊 Project Presentation
+*## 📊 Project Presentation
 
 [📥 View / Download the Presentation](./presentation/HIET_Online_Complaint_Box.pptx)
 
